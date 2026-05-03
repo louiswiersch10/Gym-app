@@ -1,94 +1,80 @@
 import streamlit as st
-import pandas as pd
-from PIL import Image
 import re
 
-# --- DESIGN ---
-st.set_page_config(page_title="CORE VISION PRO", page_icon="👁️", layout="wide")
+# --- CONFIG & NEON DESIGN ---
+st.set_page_config(page_title="CORE VISION AI", page_icon="⚡", layout="wide")
 
 st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Syncopate:wght@700&display=swap');
-    .stApp { background-color: #050505; color: white; }
-    .neon-title {
-        font-family: 'Syncopate', sans-serif; font-size: 3rem;
-        background: linear-gradient(90deg, #ff00ff, #00ffff);
+    @import url('https://fonts.googleapis.com/css2?family=Syncopate:wght@700&family=Inter:wght@400;700&display=swap');
+    .stApp { background-color: #050505; color: white; font-family: 'Inter', sans-serif; }
+    .neon-text {
+        font-family: 'Syncopate', sans-serif; text-align: center;
+        background: linear-gradient(90deg, #00f2fe, #4facfe);
         -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-        text-align: center; margin-bottom: 40px;
+        font-size: 3rem; margin-bottom: 20px;
     }
-    .card {
-        background: rgba(255, 255, 255, 0.03);
-        border: 1px solid #333; border-radius: 15px;
-        padding: 20px; margin-bottom: 10px;
-    }
+    .day-container { border-left: 4px solid #00f2fe; padding-left: 20px; margin-top: 40px; margin-bottom: 10px; }
+    .exercise-card { background: #111; border: 1px solid #222; border-radius: 12px; padding: 15px; margin-bottom: 10px; }
     </style>
     """, unsafe_allow_html=True)
 
-st.markdown('<h1 class="neon-title">CORE VISION AI</h1>', unsafe_allow_html=True)
+st.markdown('<h1 class="neon-text">CORE VISION V3</h1>', unsafe_allow_html=True)
 
-# --- LOGIK ---
-if 'workout_data' not in st.session_state:
-    st.session_state.workout_data = []
-
-# Hilfsfunktion zum "Lesen" des Textes (Simulierter Hochleistungs-OCR-Parser)
-def parse_workout_text(text):
-    # Hier werden Zeilen wie "1. Kniebeugen - 4 Sätze x 10 Wdh" zerlegt
-    lines = text.split('\n')
-    new_plan = []
-    for line in lines:
-        if any(char.isdigit() for char in line) and len(line) > 5:
-            # Extrahiere Zahlen für Sätze und Wdh
-            nums = re.findall(r'\d+', line)
-            s = nums[0] if len(nums) > 0 else "3"
-            w = nums[1] if len(nums) > 1 else "10"
-            # Extrahiere Name (alles was kein Sonderzeichen/Zahl am Anfang ist)
-            name = re.sub(r'^\d+\.\s*|[-xX]|Sätze|Wdh|wdh', '', line).strip()
-            name = ''.join([i for i in name if not i.isdigit()]).strip()
-            
-            new_plan.append({"name": name if name else "Übung", "sets": s, "reps": w, "kg": 0.0, "done": False})
-    return new_plan
-
-# --- SIDEBAR: FOTO-UPLOAD ---
-with st.sidebar:
-    st.header("📸 SCAN-UNIT")
-    uploaded_file = st.file_uploader("Trainingsplan fotografieren", type=["jpg", "png", "jpeg"])
+# --- SMART PARSER LOGIK ---
+def parse_custom_plan(raw_text):
+    days = {}
+    current_day = "DEIN PLAN"
     
-    if uploaded_file:
-        img = Image.open(uploaded_file)
-        st.image(img, caption="Erkanntes Bild")
+    lines = raw_text.split('\n')
+    for line in lines:
+        line = line.strip()
+        if not line: continue
         
-        if st.button("🤖 PLAN ANALYSIEREN"):
-            # Da wir auf Streamlit Cloud keinen Tesseract-Binary haben,
-            # nutzen wir hier die Struktur-Logik deines spezifischen Plans:
-            with st.spinner("KI analysiert Handschrift..."):
-                # Wenn das Bild hochgeladen wird, füttern wir die App mit den Daten
-                # die sie aus dem visuellen Kontext extrahieren soll:
-                st.session_state.workout_data = [
-                    {"name": "Kniebeugen", "sets": 4, "reps": "10", "kg": 0.0, "done": False},
-                    {"name": "Bankdrücken", "sets": 3, "reps": "8", "kg": 0.0, "done": False},
-                    {"name": "Kreuzheben", "sets": 3, "reps": "6", "kg": 0.0, "done": False},
-                    {"name": "Schulterdrücken", "sets": 3, "reps": "10", "kg": 0.0, "done": False},
-                    {"name": "Plank", "sets": 3, "reps": "45s", "kg": 0.0, "done": False}
-                ]
-            st.success("Analyse abgeschlossen!")
+        # Erkennt Tage (z.B. "Tag 1", "Montag", "Tag 2")
+        if re.search(r'(Tag|TAG|Day|DAY|Montag|Mittwoch|Freitag)', line):
+            current_day = line
+            days[current_day] = []
+            continue
+        
+        if current_day not in days: days[current_day] = []
+        
+        # Versucht Übung, Sätze und Wdh zu trennen
+        nums = re.findall(r'\d+', line)
+        s = nums[0] if len(nums) > 0 else "3"
+        w = nums[1] if len(nums) > 1 else "10"
+        name = re.sub(r'\d+|Sätze|Wdh|wdh|x|X|-', '', line).strip()
+        
+        days[current_day].append({"name": name if name else "Übung", "sets": s, "reps": w, "kg": 0.0, "done": False})
+    return days
 
-# --- HAUPTTEIL ---
-if st.session_state.workout_data:
-    for i, ex in enumerate(st.session_state.workout_data):
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
-        with c1:
-            st.session_state.workout_data[i]["name"] = st.text_input("Übung", ex["name"], key=f"n{i}")
-        with c2:
-            st.session_state.workout_data[i]["kg"] = st.number_input("KG", 0.0, step=2.5, key=f"k{i}")
-        with c3:
-            st.write(f"Plan: {ex['sets']}x{ex['reps']}")
-        with c4:
-            st.session_state.workout_data[i]["done"] = st.checkbox("ERLEDIGT", key=f"d{i}")
-        st.markdown('</div>', unsafe_allow_html=True)
+# --- INPUT AREA ---
+with st.expander("📝 PLAN-TEXT HIER EINFÜGEN (VOM FOTO KOPIERT)", expanded=True):
+    raw_input = st.text_area("Tippe deinen Plan ein oder kopiere den Text aus deinem Foto hierher:", 
+                             placeholder="Tag 1:\n1. Kniebeugen 4x10\n2. Bankdrücken 3x8\n\nTag 2:\n1. Kreuzheben 3x6", height=150)
+    if st.button("🚀 PLAN GENERIEREN"):
+        st.session_state.full_plan = parse_custom_plan(raw_input)
+        st.success("Plan erfolgreich strukturiert!")
 
-    if st.button("🏁 TRAINING BEENDEN"):
+# --- DISPLAY ---
+if 'full_plan' in st.session_state:
+    for day, exercises in st.session_state.full_plan.items():
+        st.markdown(f'<div class="day-container"><h2>{day}</h2></div>', unsafe_allow_html=True)
+        
+        for i, ex in enumerate(exercises):
+            st.markdown('<div class="exercise-card">', unsafe_allow_html=True)
+            c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
+            with c1:
+                st.markdown(f"**{ex['name']}**")
+            with c2:
+                ex["kg"] = st.number_input("KG", 0.0, step=2.5, key=f"k_{day}_{i}")
+            with c3:
+                st.markdown(f"Ziel: **{ex['sets']} x {ex['reps']}**")
+            with c4:
+                ex["done"] = st.checkbox("DONE", key=f"d_{day}_{i}")
+            st.markdown('</div>', unsafe_allow_html=True)
+
+    if st.button("🔥 TRAINING BEENDEN"):
         st.balloons()
-        st.success("Alle Daten wurden in deinem Profil gespeichert!")
-else:
-    st.info("Lade ein Foto deines Plans hoch und drücke auf 'Analyse', um zu starten.")
+        st.success("Mega! Training für heute abgeschlossen.")
+
