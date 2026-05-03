@@ -1,66 +1,93 @@
 import streamlit as st
 import pandas as pd
 from PIL import Image
-import io
+import datetime
 
-# App-Konfiguration für Mobile-Optik
-st.set_page_config(page_title="TrainingsPlan Digital", layout="centered")
+# --- OPTIK & THEME ---
+st.set_page_config(page_title="PRO-Gym Tracker", page_icon="💪", layout="wide")
 
-# Styling für bessere Buttons auf dem Handy
+# Custom CSS für den "Coolness-Faktor"
 st.markdown("""
     <style>
-    .stButton>button { width: 100%; height: 3em; border-radius: 10px; }
-    .stDataFrame { border: 1px solid #4CAF50; border-radius: 10px; }
+    .main { background-color: #0e1117; }
+    div.stButton > button:first-child {
+        background-color: #00ffbd; color: black; border: none;
+        font-weight: bold; border-radius: 20px; transition: 0.3s;
+    }
+    div.stButton > button:hover { background-color: #00d4a0; transform: scale(1.05); }
+    .metric-card {
+        background: rgba(255, 255, 255, 0.05);
+        padding: 20px; border-radius: 15px; border-left: 5px solid #00ffbd;
+    }
     </style>
     """, unsafe_allow_html=True)
 
-st.title("🏋️ Mein Digitaler Plan")
+# --- APP HEADER ---
+col1, col2 = st.columns([3, 1])
+with col1:
+    st.title("🚀 PRO-Gym Tracker")
+    st.write(f"Willkommen zurück! Heute ist {datetime.date.today().strftime('%d. %B %Y')}")
 
-# SEKTION 1: Plan hochladen
-with st.expander("📸 Neuen Plan scannen / hochladen", expanded=True):
-    uploaded_file = st.file_uploader("Bild vom Trainingsplan", type=["jpg", "png", "jpeg"])
-    
+with col2:
+    if st.button("🔄 Reset Plan"):
+        st.session_state.clear()
+        st.rerun()
+
+# --- SIDEBAR: PHOTO UPLOAD ---
+with st.sidebar:
+    st.header("📸 Plan Scan")
+    uploaded_file = st.file_uploader("Foto hochladen", type=["jpg", "jpeg", "png"])
     if uploaded_file:
-        img = Image.open(uploaded_file)
-        st.image(img, caption="Dein Originalplan", use_container_width=True)
-        st.success("Bild erfolgreich geladen!")
+        st.image(uploaded_file, caption="Dein Original-Plan")
+        st.success("Scan bereit!")
 
-st.divider()
+# --- TRAININGSDATEN ---
+if 'workout_data' not in st.session_state:
+    st.session_state.workout_data = [
+        {"Übung": "Bankdrücken", "Sätze": 3, "Wdh": "10", "Gewicht": 60.0, "Erledigt": False},
+        {"Übung": "Kniebeugen", "Sätze": 4, "Wdh": "8", "Gewicht": 80.0, "Erledigt": False},
+        {"Übung": "Kreuzheben", "Sätze": 3, "Wdh": "5", "Gewicht": 100.0, "Erledigt": False},
+        {"Übung": "Klimmzüge", "Sätze": 3, "Wdh": "Max", "Gewicht": 0.0, "Erledigt": False},
+    ]
 
-# SEKTION 2: Digitale Erfassung (Vorausgefüllte Vorlage)
-st.subheader("📝 Training tracken")
-st.info("Tippe in die Felder, um Gewicht oder Wiederholungen zu ändern.")
+# --- DASHBOARD LAYOUT ---
+st.subheader("Dein Workout heute:")
 
-# Beispiel-Datenstruktur, die normalerweise per KI aus dem Bild käme
-# Hier kannst du deine Standardübungen eintragen
-if 'df' not in st.session_state:
-    data = {
-        "Übung": ["Bankdrücken", "Kniebeugen", "Schulterdrücken", "Bizeps-Curls"],
-        "Sätze": ["3", "4", "3", "3"],
-        "Ziel-Wdh": ["8-12", "6-10", "10", "12"],
-        "Gewicht (kg)": [60.0, 80.0, 40.0, 12.5],
-        "Done": [False, False, False, False]
-    }
-    st.session_state.df = pd.DataFrame(data)
+# Fortschrittsbalken berechnen
+done_count = sum(1 for ex in st.session_state.workout_data if ex["Erledigt"])
+progress = done_count / len(st.session_state.workout_data)
+st.progress(progress)
+st.write(f"Fortschritt: {int(progress*100)}%")
 
-# Der interaktive Editor - hier drückst du nur noch auf die Zahlen
-edited_df = st.data_editor(
-    st.session_state.df,
-    column_config={
-        "Done": st.column_config.CheckboxColumn("Erledigt?"),
-        "Gewicht (kg)": st.column_config.NumberColumn("Kg", format="%.1f"),
-        "Übung": st.column_config.TextColumn("Übung", disabled=True)
-    },
-    hide_index=True,
-    num_rows="dynamic"
-)
+# Übungen als interaktive Liste
+for i, exercise in enumerate(st.session_state.workout_data):
+    with st.container():
+        # Karten-Optik für jede Übung
+        c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
+        
+        with c1:
+            st.markdown(f"### {exercise['Übung']}")
+        with c2:
+            st.session_state.workout_data[i]["Gewicht"] = st.number_input(
+                "Kg", value=exercise["Gewicht"], key=f"w_{i}", step=2.5
+            )
+        with c3:
+            st.session_state.workout_data[i]["Sätze"] = st.number_input(
+                "Sätze", value=exercise["Sätze"], key=f"s_{i}"
+            )
+        with c4:
+            st.write("Status")
+            st.session_state.workout_data[i]["Erledigt"] = st.checkbox(
+                "Fertig", value=exercise["Erledigt"], key=f"c_{i}"
+            )
+        st.divider()
 
-# SEKTION 3: Speichern
-if st.button("Training abschließen & Speichern"):
-    st.session_state.df = edited_df
+# --- SAVE BUTTON ---
+if st.button("🏁 TRAINING BEENDEN"):
     st.balloons()
-    st.success("Training lokal gespeichert! Top Leistung!")
+    st.confetti() # Falls verfügbar, sonst Ballons
+    st.success(f"Mega! Du hast {done_count} Übungen durchgezogen!")
     
-    # Export-Option für Excel/CSV
-    csv = edited_df.to_csv(index=False).encode('utf-8')
-    st.download_button("Plan als CSV Datei laden", data=csv, file_name="training_log.csv")
+    # Tabelle für den Export
+    final_df = pd.DataFrame(st.session_state.workout_data)
+    st.dataframe(final_df)
